@@ -1,0 +1,70 @@
+plugins {
+    id 'java'
+    id "io.freefair.lombok" version "9.2.0"
+    id "run.halo.plugin.devtools" version "0.8.0"
+}
+
+group 'com.themenets.plugingoohub'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform('run.halo.tools.platform:plugin:2.26.0')
+    compileOnly 'run.halo.app:api'
+
+    // HTML 白名单清洗（api jar 不含，插件自带）：聚合入库前消毒远端内容
+    implementation 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20240325.1'
+
+    testImplementation 'run.halo.app:api'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+// devtools 把运行时依赖平铺进 jar（胖 jar）。owasp-sanitizer 官方 jar 带代码签名，
+// 平铺后残留的 META-INF/*.SF/*.RSA 与重写的 MANIFEST 不匹配，会在类加载时抛
+// SecurityException: Invalid signature file digest —— 必须剔除签名元数据。
+tasks.named('jar') {
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.EC'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = 21
+}
+
+tasks.named('generatePluginComponentsIdx') {
+    notCompatibleWithConfigurationCache('This task invokes "Task.project" at execution time, which is not supported with configuration cache.')
+}
+
+halo {
+    version = '2.26.0'
+}
+
+// Halo devtools 的 reloadPlugin 不会把 jar 复制到容器挂载的 workplace/plugins/ 目录，
+// 需要手动复制后才能让容器里的 Halo 加载到最新代码
+tasks.register('copyPluginToWorkplace', Copy) {
+    from layout.buildDirectory.dir('libs')
+    include 'plugin-goo-hub-*.jar'
+    into rootProject.layout.projectDirectory.dir('workplace/plugins')
+    dependsOn tasks.named('jar')
+}
+
+// reloadPlugin 由 devtools 插件在评估后注册，需延迟配置
+project.tasks.configureEach { task ->
+    if (task.name == 'reloadPlugin') {
+        task.dependsOn tasks.named('copyPluginToWorkplace')
+    }
+}

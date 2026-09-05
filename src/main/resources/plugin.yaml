@@ -1,0 +1,22 @@
+# Refer https://docs.halo.run/developer-guide/plugin/basics/manifest
+
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  name: plugin-goo-hub
+spec:
+  enabled: true
+  requires: ">=2.26.0"
+  author:
+    name: ThemeNets
+    website: https://github.com/ThemeNets
+  homepage: https://github.com/ThemeNets/plugin-goo-hub#readme
+  repo: https://github.com/ThemeNets/plugin-goo-hub
+  issues: https://github.com/ThemeNets/plugin-goo/issues
+  displayName: "咕咕星系"
+  description: "咕咕星系（Goo Hub）- 联邦中心：站点注册表 + 全网内容聚合 + 统一页面。仅装在咕咕总站。"
+  settingName: goo-hub-settings
+  configMapName: goo-hub-settings-configmap
+  license:
+    - name: "GPL-3.0"
+      url: "https://github.com/ThemeNets/plugin-goo-hub/blob/main/LICENSE"
