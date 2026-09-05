@@ -7,6 +7,7 @@ import static com.themenets.plugingoohub.constants.HubRoutes.ITEM_SOURCE_CREATED
 import static com.themenets.plugingoohub.constants.HubRoutes.SITE_APPROVED;
 import static run.halo.app.extension.index.query.Queries.and;
 import static run.halo.app.extension.index.query.Queries.equal;
+import static run.halo.app.extension.index.query.Queries.in;
 
 import com.themenets.plugingoohub.domain.vo.CursorResultVo;
 import com.themenets.plugingoohub.domain.vo.FedItemVo;
@@ -308,6 +309,29 @@ public class AggregatorServiceImpl implements AggregatorService {
         if (kind != null && (kind.equalsIgnoreCase("note") || kind.equalsIgnoreCase("topic"))) {
             conditions.add(equal(ITEM_KIND, kind.toLowerCase()));
         }
+        return queryItems(conditions, page, size);
+    }
+
+    @Override
+    public Mono<CursorResultVo> listItemsBySites(List<String> siteNames, String kind,
+                                                 int page, int size) {
+        if (siteNames == null || siteNames.isEmpty()) {
+            return Mono.just(new CursorResultVo(List.of(), null, false));
+        }
+        List<Condition> conditions = new ArrayList<>();
+        conditions.add(equal(ITEM_DELETED, "false"));
+        conditions.add(siteNames.size() == 1
+            ? equal(ITEM_SITE_NAME, siteNames.get(0))
+            : in(ITEM_SITE_NAME, siteNames));
+        if (kind != null && (kind.equalsIgnoreCase("note") || kind.equalsIgnoreCase("topic"))) {
+            conditions.add(equal(ITEM_KIND, kind.toLowerCase()));
+        }
+        return queryItems(conditions, page, size);
+    }
+
+    /** 条件组装 + 分页混排 + VO 映射（listItems / listItemsBySites 共用） */
+    private Mono<CursorResultVo> queryItems(List<Condition> conditions,
+                                            int page, int size) {
         Condition query = conditions.size() == 1
             ? conditions.get(0) : and(conditions.get(0),
                 conditions.subList(1, conditions.size()).toArray(new Condition[0]));

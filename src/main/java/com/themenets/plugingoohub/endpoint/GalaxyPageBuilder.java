@@ -102,6 +102,9 @@ public final class GalaxyPageBuilder {
                   <option value="note">咕咕</option>
                   <option value="topic">话题</option>
                 </select>
+                <label style="color:var(--dim);font-size:13px;cursor:pointer">
+                  <input type="checkbox" id="mine-sel"> 只看我的订阅
+                </label>
                 <button id="btn-more" class="hidden">加载更多</button>
                 <span class="state" id="items-state"></span>
               </div>
@@ -115,6 +118,9 @@ public final class GalaxyPageBuilder {
             <script>
             var API = '/apis/hub.api.goo.themenets.com/v1alpha1';
             var sitesMap = {};
+            var sitesCache = [];
+            var myFollows = {};
+            var mineOnly = false;
 
             function $(id){return document.getElementById(id)}
             function escNode(el, txt){el.textContent = txt == null ? '' : String(txt)}
@@ -136,50 +142,100 @@ public final class GalaxyPageBuilder {
               fetch(API + '/federation/sites', {cache:'no-store'})
                 .then(function(r){return r.json()})
                 .then(function(list){
+                  sitesCache = list || [];
                   sitesMap = {};
-                  var grid = $('sites-grid');
-                  grid.innerHTML = '';
-                  $('sites-empty').classList.toggle('hidden', list.length > 0);
-                  $('sites-state').textContent = list.length ? ('共 ' + list.length + ' 个站点') : '';
-                  list.forEach(function(s){
-                    if(s && s.url) sitesMap[s.name] = s.title || s.url;
-                    var c = document.createElement('div'); c.className = 'card';
-                    var h3 = document.createElement('h3');
-                    var a = document.createElement('a');
-                    a.target = '_blank'; a.rel = 'noopener';
-                    escNode(a, s.title || s.url); a.href = s.url || '#';
-                    h3.appendChild(a); c.appendChild(h3);
-                    if(s.subtitle){var sub=document.createElement('div');sub.className='sub';
-                      escNode(sub,s.subtitle);c.appendChild(sub);}
-                    if(s.description){var d=document.createElement('div');d.className='desc';
-                      escNode(d,s.description);c.appendChild(d);}
-                    var badges = document.createElement('div');
-                    (s.kinds || []).forEach(function(k){
-                      var b=document.createElement('span');b.className='badge k-'+k;
-                      escNode(b,kindName(k));badges.appendChild(b);});
-                    c.appendChild(badges);
-                    var meta=document.createElement('div');meta.className='meta';
-                    var cnt=document.createElement('span');
-                    escNode(cnt,'咕咕 '+(s.noteCount==null?'-':s.noteCount)+' · 话题 '
-                                  +(s.topicCount==null?'-':s.topicCount));
-                    meta.appendChild(cnt);
-                    if(s.lastSyncAt){var ls=document.createElement('span');
-                      escNode(ls,'同步 '+fmtTime(s.lastSyncAt));meta.appendChild(ls);}
-                    if(s.lastError){var er=document.createElement('span');er.className='err';
-                      escNode(er,s.lastError);meta.appendChild(er);}
-                    c.appendChild(meta);
-                    grid.appendChild(c);
+                  sitesCache.forEach(function(s){
+                    if(s && s.name) sitesMap[s.name] = (s.title || s.url);
                   });
-                  $('sites-state').textContent = list.length ? ('共 ' + list.length + ' 个站点') : '';
+                  renderSites();
                 })
                 .catch(function(){ $('sites-state').textContent = '加载失败，请刷新重试'; });
             }
 
+            function renderSites(){
+              var grid = $('sites-grid');
+              grid.innerHTML = '';
+              var list = sitesCache;
+              $('sites-empty').classList.toggle('hidden', list.length > 0);
+              $('sites-state').textContent = list.length ? ('共 ' + list.length + ' 个站点') : '';
+              list.forEach(function(s){
+                var c = document.createElement('div'); c.className = 'card';
+                var h3 = document.createElement('h3');
+                var a = document.createElement('a');
+                a.target = '_blank'; a.rel = 'noopener';
+                escNode(a, s.title || s.url); a.href = s.url || '#';
+                h3.appendChild(a); c.appendChild(h3);
+                if(s.subtitle){var sub=document.createElement('div');sub.className='sub';
+                  escNode(sub,s.subtitle);c.appendChild(sub);}
+                if(s.description){var d=document.createElement('div');d.className='desc';
+                  escNode(d,s.description);c.appendChild(d);}
+                var badges = document.createElement('div');
+                (s.kinds || []).forEach(function(k){
+                  var b=document.createElement('span');b.className='badge k-'+k;
+                  escNode(b,kindName(k));badges.appendChild(b);});
+                c.appendChild(badges);
+                var meta=document.createElement('div');meta.className='meta';
+                var cnt=document.createElement('span');
+                escNode(cnt,'咕咕 '+(s.noteCount==null?'-':s.noteCount)+' · 话题 '
+                              +(s.topicCount==null?'-':s.topicCount));
+                meta.appendChild(cnt);
+                if(s.lastSyncAt){var ls=document.createElement('span');
+                  escNode(ls,'同步 '+fmtTime(s.lastSyncAt));meta.appendChild(ls);}
+                if(s.lastError){var er=document.createElement('span');er.className='err';
+                  escNode(er,s.lastError);meta.appendChild(er);}
+                c.appendChild(meta);
+                // 订阅按钮（阶段四）
+                var fbtn = document.createElement('button');
+                fbtn.style.cssText = 'margin-top:10px;background:var(--panel2);border:1px solid '
+                  + 'var(--line);color:var(--txt);border-radius:8px;padding:5px 14px;'
+                  + 'font-size:13px;cursor:pointer';
+                fbtn.textContent = myFollows[s.name] ? '已订阅 ✓' : '+ 订阅';
+                fbtn.onclick = function(){ toggleFollow(s.name); };
+                c.appendChild(fbtn);
+                grid.appendChild(c);
+              });
+              $('sites-state').textContent = list.length ? ('共 ' + list.length + ' 个站点') : '';
+            }
+
+            function loadFollows(){
+              fetch(API + '/federation/follows', {cache:'no-store', credentials:'same-origin'})
+                .then(function(r){ return r.ok ? r.json() : []; })
+                .then(function(names){
+                  myFollows = {};
+                  (names || []).forEach(function(n){ myFollows[n] = true; });
+                  renderSites();
+                })
+                .catch(function(){});
+            }
+
+            function toggleFollow(name){
+              var path = myFollows[name] ? '/federation/unfollow' : '/federation/follow';
+              fetch(API + path, {method:'POST', credentials:'same-origin',
+                    headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({siteName: name})})
+                .then(function(r){
+                  if(r.status === 401){
+                    $('sites-state').textContent = '订阅需要先登录咕咕总站';
+                    return null;
+                  }
+                  return r.json();
+                })
+                .then(function(j){
+                  if(j && j.ok){
+                    if(myFollows[name]) { delete myFollows[name]; }
+                    else { myFollows[name] = true; }
+                    renderSites();
+                  }
+                })
+                .catch(function(){ $('sites-state').textContent = '操作失败，请重试'; });
+            }
+
             function loadItems(page){
               var kind = $('kind-sel').value;
+              var base = mineOnly ? '/federation/my-items' : '/federation/items';
               $('items-state').textContent = '加载中…';
-              fetch(API + '/federation/items?page=' + page + '&size=20' +
-                    (kind ? '&kind=' + kind : ''), {cache:'no-store'})
+              fetch(API + base + '?page=' + page + '&size=20' +
+                    (kind ? '&kind=' + kind : ''), {cache:'no-store', credentials:'same-origin'})
                 .then(function(r){return r.json()})
                 .then(function(res){
                   var list = $('items-list');
@@ -217,9 +273,13 @@ public final class GalaxyPageBuilder {
 
             $('kind-sel').addEventListener('change', function(){
               $('items-list').innerHTML = ''; loadItems(1)});
+            $('mine-sel').addEventListener('change', function(){
+              mineOnly = $('mine-sel').checked;
+              $('items-list').innerHTML = ''; loadItems(1)});
             $('btn-reload').addEventListener('click', loadSites);
 
             loadSites();
+            loadFollows();
             </script>
             </body>
             </html>

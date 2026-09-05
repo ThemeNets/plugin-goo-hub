@@ -19,7 +19,7 @@ class GalaxyPageBuilderTest {
         // 数据端点指向 hub API group（固定 group，页面 JS 以 var API 基路径 + 端点路径拼接）
         assertThat(html).contains("/apis/" + API_GROUP + "/v1alpha1");
         assertThat(html).contains("'/federation/sites'");
-        assertThat(html).contains("'/federation/items?");
+        assertThat(html).contains("'/federation/items'");
         // 数据注入安全约定：textContent 注入，绝不 innerHTML 拼接用户数据
         assertThat(html).contains("textContent");
         // 不存在未替换的模板残留

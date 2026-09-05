@@ -29,6 +29,19 @@ public final class HubRoutes {
     /** 统一页面（SSR 壳，数据经 JS 拉取） */
     public static final String FEDERATION_PAGE = "federation/page";
 
+    /** 用户订阅：我的关注列表（公开口径=登录用户自己的） */
+    public static final String FEDERATION_FOLLOWS = "federation/follows";
+    /** 关注某站点（登录） */
+    public static final String FEDERATION_FOLLOW = "federation/follow";
+    /** 取消关注（登录） */
+    public static final String FEDERATION_UNFOLLOW = "federation/unfollow";
+    /** 我的订阅时间线（登录，按关注站点过滤聚合条目） */
+    public static final String FEDERATION_MY_ITEMS = "federation/my-items";
+
+    /** FedFollow 索引字段名 */
+    public static final String FOLLOW_USER = "spec.username";
+    public static final String FOLLOW_SITE = "spec.siteName";
+
     /** FedSite 索引字段名（与实体字段同步维护） */
     public static final String SITE_URL = "spec.siteUrl";
     public static final String SITE_APPROVED = "spec.approved";

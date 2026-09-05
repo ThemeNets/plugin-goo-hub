@@ -1,6 +1,8 @@
 package com.themenets.plugingoohub;
 
 import static com.themenets.plugingoohub.constants.HubRoutes.EXTENSION_GROUP;
+import static com.themenets.plugingoohub.constants.HubRoutes.FOLLOW_SITE;
+import static com.themenets.plugingoohub.constants.HubRoutes.FOLLOW_USER;
 import static com.themenets.plugingoohub.constants.HubRoutes.ITEM_DELETED;
 import static com.themenets.plugingoohub.constants.HubRoutes.ITEM_KIND;
 import static com.themenets.plugingoohub.constants.HubRoutes.ITEM_SITE_NAME;
@@ -9,6 +11,7 @@ import static com.themenets.plugingoohub.constants.HubRoutes.ITEM_SOURCE_NAME;
 import static com.themenets.plugingoohub.constants.HubRoutes.SITE_APPROVED;
 import static com.themenets.plugingoohub.constants.HubRoutes.SITE_URL;
 
+import com.themenets.plugingoohub.extension.FedFollow;
 import com.themenets.plugingoohub.extension.FedItem;
 import com.themenets.plugingoohub.extension.FedSite;
 import com.themenets.plugingoohub.service.AggregatorService;
@@ -83,7 +86,15 @@ public class GooHubPlugin extends BasePlugin {
                     return "true";
                 }));
         });
-        log.info("plugin-goo-hub 启动完成（FedSite/FedItem 已注册）");
+        schemeManager.register(FedFollow.class, specs -> {
+            specs.add(IndexSpecs.<FedFollow, String>single(FOLLOW_USER, String.class)
+                .indexFunc(f -> f.getSpec() == null
+                    ? null : f.getSpec().getUsername()));
+            specs.add(IndexSpecs.<FedFollow, String>single(FOLLOW_SITE, String.class)
+                .indexFunc(f -> f.getSpec() == null
+                    ? null : f.getSpec().getSiteName()));
+        });
+        log.info("plugin-goo-hub 启动完成（FedSite/FedItem/FedFollow 已注册）");
 
         // 定时聚合线程：首轮立即铺底（since=null 拉各站最新一批），之后每 10 分钟增量一轮。
         // daemon 线程 + stop() 中断；单站失败仅记 lastError（syncAll 内部吞掉）不断轮。
@@ -116,6 +127,7 @@ public class GooHubPlugin extends BasePlugin {
         }
         schemeManager.unregister(schemeManager.get(FedSite.class));
         schemeManager.unregister(schemeManager.get(FedItem.class));
+        schemeManager.unregister(schemeManager.get(FedFollow.class));
         log.info("plugin-goo-hub 已停止");
     }
 }

@@ -1,17 +1,24 @@
 package com.themenets.plugingoohub.endpoint;
 
 import static com.themenets.plugingoohub.constants.HubRoutes.API_VERSION;
+import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_FOLLOWS;
+import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_FOLLOW;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_ITEMS;
+import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_MY_ITEMS;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_PAGE;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_REGISTER;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_SITES;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_SYNC;
+import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_UNFOLLOW;
 
 import com.themenets.plugingoohub.domain.vo.CursorResultVo;
 import com.themenets.plugingoohub.domain.vo.SiteItemVo;
 import com.themenets.plugingoohub.service.AggregatorService;
+import com.themenets.plugingoohub.service.FollowService;
 import com.themenets.plugingoohub.service.RegistrationService;
+import com.themenets.plugingoohub.service.impl.FollowServiceImpl;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.server.RouterFunction;
@@ -39,6 +46,9 @@ import java.util.Map;
  *       query 可选 siteName/kind/page/size，(sourceCreatedAt, name) 倒序混排。</li>
  *   <li>GET federation/page — 「咕咕星系」统一页面（阶段三，公开，text/html）：
  *       站点目录 Tab + 全网时间线 Tab，数据由页面 JS 拉取上述 JSON。</li>
+ *   <li>阶段四 用户订阅（登录）：GET federation/follows（我的关注）/ POST federation/follow /
+ *       POST federation/unfollow（body {"siteName": ...}）/ GET federation/my-items
+ *       （按我的关注过滤的全网时间线）。匿名一律 401。</li>
  * </ul>
  * 审核开关 / 限流属治理项，后续版本按需加。
  */
@@ -48,6 +58,7 @@ public class HubFederationEndpoint implements CustomEndpoint {
 
     private final RegistrationService registrationService;
     private final AggregatorService aggregatorService;
+    private final FollowService followService;
 
     @Override
     public RouterFunction<ServerResponse> endpoint() {
@@ -57,6 +68,10 @@ public class HubFederationEndpoint implements CustomEndpoint {
             .POST(FEDERATION_SYNC, this::sync)
             .GET(FEDERATION_ITEMS, this::items)
             .GET(FEDERATION_PAGE, this::page)
+            .GET(FEDERATION_FOLLOWS, this::follows)
+            .POST(FEDERATION_FOLLOW, this::follow)
+            .POST(FEDERATION_UNFOLLOW, this::unfollow)
+            .GET(FEDERATION_MY_ITEMS, this::myItems)
             .build();
     }
 
@@ -126,6 +141,79 @@ public class HubFederationEndpoint implements CustomEndpoint {
         return ServerResponse.ok()
             .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
             .bodyValue(html);
+    }
+
+    // ---------- 阶段四：用户订阅（登录） ----------
+
+    /** 匿名 → 401 响应 */
+    private static Mono<ServerResponse> unauthorized() {
+        return ServerResponse.status(HttpStatus.UNAUTHORIZED)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(Map.of("error", "请先登录咕咕总站"));
+    }
+
+    /** 我关注的站点名列表（登录） */
+    private Mono<ServerResponse> follows(ServerRequest request) {
+        return FollowServiceImpl.currentUser()
+            .flatMap(u -> followService.listFollows(u)
+                .flatMap(names -> ServerResponse.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(names)))
+            .switchIfEmpty(unauthorized())
+            .onErrorResume(HubEndpointSupport::mapError);
+    }
+
+    /** 关注站点：body {"siteName": "fed-xxx"}（登录） */
+    private Mono<ServerResponse> follow(ServerRequest request) {
+        return FollowServiceImpl.currentUser()
+            .flatMap(u -> request.bodyToMono(Map.class).defaultIfEmpty(Map.of())
+                .flatMap(body -> {
+                    String siteName = body.get("siteName") instanceof String s ? s : "";
+                    if (siteName.isBlank()) {
+                        return Mono.error(new IllegalArgumentException("siteName 必填"));
+                    }
+                    return followService.follow(u, siteName)
+                        .then(ServerResponse.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(Map.of("ok", true)));
+                }))
+            .switchIfEmpty(unauthorized())
+            .onErrorResume(HubEndpointSupport::mapError);
+    }
+
+    /** 取消关注：body {"siteName": "fed-xxx"}（登录） */
+    private Mono<ServerResponse> unfollow(ServerRequest request) {
+        return FollowServiceImpl.currentUser()
+            .flatMap(u -> request.bodyToMono(Map.class).defaultIfEmpty(Map.of())
+                .flatMap(body -> {
+                    String siteName = body.get("siteName") instanceof String s ? s : "";
+                    if (siteName.isBlank()) {
+                        return Mono.error(new IllegalArgumentException("siteName 必填"));
+                    }
+                    return followService.unfollow(u, siteName)
+                        .then(ServerResponse.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(Map.of("ok", true)));
+                }))
+            .switchIfEmpty(unauthorized())
+            .onErrorResume(HubEndpointSupport::mapError);
+    }
+
+    /** 我的订阅时间线：登录用户的关注站点聚合条目（页码模式） */
+    private Mono<ServerResponse> myItems(ServerRequest request) {
+        return FollowServiceImpl.currentUser()
+            .flatMap(u -> followService.listFollows(u)
+                .flatMap(names -> {
+                    String kind = request.queryParam("kind").orElse("");
+                    int page = parseInt(request.queryParam("page").orElse(""), 1);
+                    int size = parseInt(request.queryParam("size").orElse("30"), 30);
+                    return aggregatorService.listItemsBySites(names, kind, page, size);
+                })
+                .flatMap(vo -> ServerResponse.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(vo)))
+            .switchIfEmpty(unauthorized())
+            .onErrorResume(HubEndpointSupport::mapError);
     }
 
     @Override

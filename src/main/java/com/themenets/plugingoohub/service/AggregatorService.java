@@ -5,6 +5,8 @@ import com.themenets.plugingoohub.domain.vo.FedItemVo;
 import com.themenets.plugingoohub.domain.vo.SiteItemVo;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
  * 聚合器（阶段二核心）：逐站拉对端增量时间线入库 FedItem，并提供全网混排读端。
  * <p>
@@ -38,4 +40,11 @@ public interface AggregatorService {
      * @param size     每页条数
      */
     Mono<CursorResultVo> listItems(String siteName, String kind, int page, int size);
+
+    /**
+     * 按站点集合聚合时间线（阶段四"我的订阅"数据端）：
+     * siteNames 为空 → 空结果；多站用 in() 一把查，(sourceCreatedAt, name) 倒序混排。
+     */
+    Mono<CursorResultVo> listItemsBySites(List<String> siteNames, String kind,
+                                          int page, int size);
 }
