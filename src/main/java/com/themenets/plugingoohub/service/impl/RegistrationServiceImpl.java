@@ -4,7 +4,6 @@ import com.themenets.plugingoohub.domain.vo.SiteItemVo;
 import com.themenets.plugingoohub.extension.FedSite;
 import com.themenets.plugingoohub.service.CapabilitiesClient;
 import com.themenets.plugingoohub.service.RegistrationService;
-import static run.halo.app.extension.index.query.Queries.equal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -20,6 +19,7 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import static run.halo.app.extension.index.query.Queries.equal;
 
 /**
  * 站点登记实现（阶段一）：登记 → 拉 capabilities 自动验证 → 落 FedSite。

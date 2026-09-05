@@ -2,6 +2,7 @@ package com.themenets.plugingoohub.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -19,6 +20,7 @@ import java.util.List;
  * 拉取 {@code {siteUrl}/apis/api.goo.themenets.com/v1alpha1/federation/capabilities}
  * 并解析为 {@link CapabilitiesVo}；登记与聚合共用。
  */
+@Component
 public class CapabilitiesClient {
 
     /** 对端 capabilities 解析结果（hub 侧扁平结构；解析容错：缺字段取默认值） */
