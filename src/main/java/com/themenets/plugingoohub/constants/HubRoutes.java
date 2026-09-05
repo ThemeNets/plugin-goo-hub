@@ -26,6 +26,8 @@ public final class HubRoutes {
     public static final String FEDERATION_SYNC = "federation/sync";
     /** 全网聚合条目（公开列表，游标模式） */
     public static final String FEDERATION_ITEMS = "federation/items";
+    /** 统一页面（SSR 壳，数据经 JS 拉取） */
+    public static final String FEDERATION_PAGE = "federation/page";
 
     /** FedSite 索引字段名（与实体字段同步维护） */
     public static final String SITE_URL = "spec.siteUrl";

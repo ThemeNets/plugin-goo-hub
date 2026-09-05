@@ -2,6 +2,7 @@ package com.themenets.plugingoohub.endpoint;
 
 import static com.themenets.plugingoohub.constants.HubRoutes.API_VERSION;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_ITEMS;
+import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_PAGE;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_REGISTER;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_SITES;
 import static com.themenets.plugingoohub.constants.HubRoutes.FEDERATION_SYNC;
@@ -21,6 +22,7 @@ import reactor.core.publisher.Mono;
 import run.halo.app.core.extension.endpoint.CustomEndpoint;
 import run.halo.app.extension.GroupVersion;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +37,8 @@ import java.util.Map;
  *       站点自助触发，同步幂等可重入。</li>
  *   <li>GET federation/items — 全网聚合时间线（阶段二，公开）：
  *       query 可选 siteName/kind/page/size，(sourceCreatedAt, name) 倒序混排。</li>
+ *   <li>GET federation/page — 「咕咕星系」统一页面（阶段三，公开，text/html）：
+ *       站点目录 Tab + 全网时间线 Tab，数据由页面 JS 拉取上述 JSON。</li>
  * </ul>
  * 审核开关 / 限流属治理项，后续版本按需加。
  */
@@ -52,6 +56,7 @@ public class HubFederationEndpoint implements CustomEndpoint {
             .GET(FEDERATION_SITES, this::sites)
             .POST(FEDERATION_SYNC, this::sync)
             .GET(FEDERATION_ITEMS, this::items)
+            .GET(FEDERATION_PAGE, this::page)
             .build();
     }
 
@@ -113,6 +118,14 @@ public class HubFederationEndpoint implements CustomEndpoint {
         } catch (NumberFormatException e) {
             return defVal;
         }
+    }
+
+    /** 「咕咕星系」统一页面（阶段三）：纯静态壳，数据由页面 JS 拉取 sites/items JSON */
+    private Mono<ServerResponse> page(ServerRequest request) {
+        byte[] html = GalaxyPageBuilder.build().getBytes(StandardCharsets.UTF_8);
+        return ServerResponse.ok()
+            .contentType(new MediaType("text", "html", StandardCharsets.UTF_8))
+            .bodyValue(html);
     }
 
     @Override
